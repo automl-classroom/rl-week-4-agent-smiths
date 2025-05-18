@@ -237,11 +237,13 @@ class DQNAgent(AbstractAgent):
         mask = torch.tensor(np.array(dones), dtype=torch.float32)  # noqa: F841
 
         # # TODO: pass batched states through self.q and gather Q(s,a)
-        pred = self.target_q(s).gather(1, a).squeeze()
+        pred = self.q(s).gather(1, a).squeeze()
 
         # TODO: compute TD target with frozen network
         with torch.no_grad():
-            target = self.q(s_next).max(dim=1).values * self.gamma + r
+            target = (
+                self.target_q(s_next).max(dim=1).values * (1 - mask) * self.gamma + r
+            )
 
         loss = nn.MSELoss()(pred, target)
 
@@ -257,7 +259,7 @@ class DQNAgent(AbstractAgent):
         self.total_steps += 1
         return float(loss.item())
 
-    def train(self, num_frames: int, eval_interval: int = 1000) -> None:
+    def train(self, num_frames: int, eval_interval: int = 1000) -> List:
         """
         Run a training loop for a fixed number of frames.
 
@@ -271,6 +273,8 @@ class DQNAgent(AbstractAgent):
         state, _ = self.env.reset()
         ep_reward = 0.0
         recent_rewards: List[float] = []
+
+        recent_rewards_avg: List[Tuple] = []
 
         for frame in range(1, num_frames + 1):
             action = self.predict_action(state)
@@ -295,11 +299,14 @@ class DQNAgent(AbstractAgent):
                 if len(recent_rewards) % 10 == 0:
                     # TODO: compute avg over last eval_interval episodes and print
                     avg = np.mean(recent_rewards[::-1][:eval_interval])
+                    recent_rewards_avg.append((frame, avg))
                     print(
                         f"Frame {frame}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
                     )
 
         print("Training complete.")
+
+        return recent_rewards_avg
 
 
 @hydra.main(config_path="../configs/agent/", config_name="dqn", version_base="1.1")
@@ -310,7 +317,15 @@ def main(cfg: DictConfig):
 
     # 3) TODO: instantiate & train the agent
     agent = DQNAgent(env)
-    agent.train(cfg.train.num_frames, cfg.train.eval_interval)
+    result = agent.train(cfg.train.num_frames, cfg.train.eval_interval)
+
+    import pandas as pd
+
+    df = pd.DataFrame.from_records(result, columns=["Frame", "Rewards"])
+    df.to_csv(f"./data_{cfg.agent.batch_size}_{cfg.agent.buffer_capacity}_default.csv")
+    print(f"./data_{cfg.agent.batch_size}_{cfg.agent.buffer_capacity}_default.csv")
+
+    print("Finished.")
 
 
 if __name__ == "__main__":
