@@ -237,11 +237,11 @@ class DQNAgent(AbstractAgent):
         mask = torch.tensor(np.array(dones), dtype=torch.float32)  # noqa: F841
 
         # # TODO: pass batched states through self.q and gather Q(s,a)
-        pred = torch.stack([self.q.forward(_s) for _s in s], dim=0)
+        pred = self.target_q(s).gather(1, a).squeeze()
 
         # TODO: compute TD target with frozen network
         with torch.no_grad():
-            target = torch.stack([self.target_q.forward(_s) for _s in s], dim=0)
+            target = self.q(s_next).max(dim=1).values * self.gamma + r
 
         loss = nn.MSELoss()(pred, target)
 
@@ -294,7 +294,7 @@ class DQNAgent(AbstractAgent):
                 # logging
                 if len(recent_rewards) % 10 == 0:
                     # TODO: compute avg over last eval_interval episodes and print
-                    avg = np.mean(recent_rewards)
+                    avg = np.mean(recent_rewards[::-1][:eval_interval])
                     print(
                         f"Frame {frame}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
                     )
