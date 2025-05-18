@@ -91,7 +91,7 @@ class ReplayBuffer(AbstractBuffer):
         """
         # TODO: randomly choose `batch_size` unique indices from [0, len(self.states))
 
-        idxs = np.random.randint(0, len(self.states), size=batch_size)
+        idxs = np.random.choice(len(self.states), size=batch_size, replace=False)
         return [
             (
                 self.states[i],
